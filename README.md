@@ -1,0 +1,3 @@
+# ctalk
+Student project for Programming Principles, Fall 2020 @ Shiraz University  
+Warning: Extremely dirty code, refinement over time...  
