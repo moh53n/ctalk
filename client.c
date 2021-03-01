@@ -8,28 +8,8 @@
 #include <netinet/in.h> 
 #include <netdb.h> 
 #include <unistd.h>
+
 #define SA struct sockaddr
-
-typedef struct
-{
-    char type;   //auth type
-} proto_authentication_req;
-
-typedef struct
-{
-    char type;   //auth type
-    char secret[33];   //128 bit secret
-} proto_authentication_resp;
-
-typedef struct
-{
-    char err_type[2];   //error type
-} proto_authentication_err;
-
-typedef struct
-{
-    char secret[33];   //128 bit token
-} proto_authentication_ok;
 
 typedef struct
 {
@@ -525,11 +505,11 @@ int send_message(int is_p2p, int socket, int chat, char * message, char * token)
 }
 
 
-int authenticate_serialize(int socket, proto_authentication_resp * req) {
+int authenticate_serialize(int socket, char * secret) {
 	char payload[33];
 	strncpy(payload, "0", 1);
 	strncat(payload, "|", 1);
-	strncat(payload, req->secret, 33);
+	strncat(payload, secret, 33);
 	send_serialized(socket, "AUTH_SECRET", payload);
 	//free(payload);
 	return 0;
@@ -548,10 +528,7 @@ int authenticate_get_resp(int socket, char * token) {
 
 int authenticate(int socket, char * password, char * glob_token) {
     char token[33];
-    proto_authentication_resp * req = malloc(sizeof(proto_authentication_resp));
-    req->type = "0";
-    strncpy(req->secret, password, 33);
-    authenticate_serialize(socket, req);
+    authenticate_serialize(socket, password);
 	authenticate_get_resp(socket, token);
 	strncpy(glob_token, token, 33);
 }
