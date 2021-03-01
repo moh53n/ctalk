@@ -48,27 +48,6 @@ typedef struct
     char * buff;
 } client_tree;
 
-typedef struct
-{
-    char type;   //auth type
-} proto_authentication_req;
-
-typedef struct
-{
-    char type;   //auth type
-    char secret[33];   //128 bit secret
-} proto_authentication_resp;
-
-typedef struct
-{
-    char err_type[2];   //error type
-} proto_authentication_err;
-
-typedef struct
-{
-    char secret[33];   //128 bit token
-} proto_authentication_ok;
-
 group * group_register(server_tree * root);
 int get_param(char * dest, char * src, int index);
 
