@@ -1,13 +1,14 @@
 CC = gcc
-CFLAGS += -lpthread
+CFLAGS += -lpthread -I./src/include
 
 all: client server
 
-server: server.o
+server: src/server/server.o src/net/socket.o
 	$(CC) -o $@ $^ $(CFLAGS)
 
-client: client.o
+client: src/client/client.o src/client/base64.o src/net/socket.o
 	$(CC) -o $@ $^ $(CFLAGS)
 
 clean:
-	rm -rf server.o server client.o client
+	find . -type f -name '*.o' -delete
+	rm -f server client

@@ -3,63 +3,8 @@
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
-#include <netinet/in.h> 
-
-#define SA struct sockaddr
-
-typedef struct
-{
-    int id;
-    int users;
-    int clients[50];
-} group;
-
-typedef struct
-{
-    int id;
-    int sock;
-    int is_group;
-    group * group_ptr;
-    void * root;
-    char token[33];   
-    char * buff;
-} proto_authentication_client;
-
-typedef struct
-{
-    int serv_sock;
-    int cli_index;
-    proto_authentication_client * clients;
-} server_tree;
-
-typedef struct
-{
-    in_addr_t ip;
-    int port;
-} client_p2p;
-
-typedef struct
-{
-    int sock;
-    int is_listen;
-    int is_p2p;
-    int halt;
-    client_p2p clients[50];
-    char * buff;
-} client_tree;
-
-group * group_register(server_tree * root);
-int get_param(char * dest, char * src, int index);
-
-int check_sock(int sock) {
-    int error = 0;
-    socklen_t len = sizeof (error);
-    int retval = getsockopt (sock, SOL_SOCKET, SO_ERROR, &error, &len);
-    if (retval == 0 && error == 0) {
-        return 0;
-    }
-    else return -1;
-}
+#include <net/socket.h>
+#include <server/server.h>
 
 char * get_file(proto_authentication_client * cli){
     char * base64 = malloc(1024 * 1024 * 4 * 1.5);
@@ -323,81 +268,6 @@ void server_authenticate(void * clinet) {
         strncpy(cli->token, token, 33);
         send_serialized(cli->sock, "AUTH_OK", token);
     }
-}
-
-int init_socket() { 
-	int sockfd; 
-	 	sockfd = socket(AF_INET, SOCK_STREAM, 0); 
-	if (sockfd == -1) { 
-		printf("socket creation failed...\n"); 
-		return -1; 
-	} 
-	else
-		printf("Socket successfully created..\n"); 
-	    return sockfd;
-} 
-
-int connect_socket(int sockfd, int port) {
-    struct sockaddr_in servaddr;
-    bzero(&servaddr, sizeof(servaddr)); 
-
-	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr = inet_addr("127.0.0.1"); 
-	servaddr.sin_port = htons(port); 
-
-	if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
-		printf("connection with the server failed...\n"); 
-		return -1; 
-	} 
-	else
-		printf("connected to the server..\n");
-        return sockfd;
-}
-
-int bind_socket(int sockfd, int port) {
-    struct sockaddr_in servaddr;
-    bzero(&servaddr, sizeof(servaddr)); 
-  
-    servaddr.sin_family = AF_INET; 
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
-    servaddr.sin_port = htons(port); 
-  
-    if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) { 
-        printf("socket bind failed...\n"); 
-        return -1; 
-    } 
-    else
-        printf("Socket successfully binded..\n");
-        return sockfd;
-}
-
-int listen_socket(int sockfd) {
-    if ((listen(sockfd, 5)) != 0) { 
-        printf("Listen failed...\n"); 
-        return -1; 
-    } 
-    else
-        printf("Server listening..\n");
-        return sockfd;
-}
-
-int accept_socket(int sockfd) {
-    int connfd, len;
-    struct sockaddr_in cli; 
-
-    len = sizeof(cli);
-    connfd = accept(sockfd, (SA*)&cli, &len); 
-    if (connfd < 0) { 
-        printf("server acccept failed...\n"); 
-        return -1;
-    } 
-    else
-        printf("server acccept the client...\n"); 
-        return connfd;
-}
-
-int close_socket(int sockfd) {
-
 }
 
 int send_serialized(int sockfd, char * type, char * payload) {

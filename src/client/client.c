@@ -1,158 +1,25 @@
-#include <netdb.h> 
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <string.h> 
-#include <sys/socket.h> 
 #include <pthread.h>
-#include <arpa/inet.h> 
-#include <netinet/in.h> 
-#include <netdb.h> 
 #include <unistd.h>
+#include <net/socket.h>
+#include <client/client.h>
+#include <client/base64.h>
 
-#define SA struct sockaddr
-
-typedef struct
-{
-    int id;
-    int users;
-    int clients[50];
-} group;
-
-typedef struct
-{
-    int id;
-    int sock;
-    int is_group;
-    group * group_ptr;
-    void * root;
-    char token[33];   
-    char * buff;
-} proto_authentication_client;
-
-typedef struct
-{
-    int serv_sock;
-    int cli_index;
-    proto_authentication_client * clients;
-} server_tree;
-
-typedef struct
-{
-    in_addr_t ip;
-    int port;
-} client_p2p;
-
-typedef struct
-{
-    int sock;
-    int is_listen;
-    int is_p2p;
-    int halt;
-    client_p2p clients[50];
-    char * buff;
-} client_tree;
-
-int read_safe(int sock, char * dest);
-
-static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-                                'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-                                'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-                                'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
-                                'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-                                'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-                                'w', 'x', 'y', 'z', '0', '1', '2', '3',
-                                '4', '5', '6', '7', '8', '9', '+', '/'};
-static char *decoding_table = NULL;
-static int mod_table[] = {0, 2, 1};
-
-
-char *base64_encode(const unsigned char *data,
-                    size_t input_length,
-                    size_t *output_length) {
-
-    *output_length = 4 * ((input_length + 2) / 3);
-
-    char *encoded_data = malloc(*output_length);
-    if (encoded_data == NULL) return NULL;
-
-    for (int i = 0, j = 0; i < input_length;) {
-
-        uint32_t octet_a = i < input_length ? (unsigned char)data[i++] : 0;
-        uint32_t octet_b = i < input_length ? (unsigned char)data[i++] : 0;
-        uint32_t octet_c = i < input_length ? (unsigned char)data[i++] : 0;
-
-        uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
-
-        encoded_data[j++] = encoding_table[(triple >> 3 * 6) & 0x3F];
-        encoded_data[j++] = encoding_table[(triple >> 2 * 6) & 0x3F];
-        encoded_data[j++] = encoding_table[(triple >> 1 * 6) & 0x3F];
-        encoded_data[j++] = encoding_table[(triple >> 0 * 6) & 0x3F];
-    }
-
-    for (int i = 0; i < mod_table[input_length % 3]; i++)
-        encoded_data[*output_length - 1 - i] = '=';
-
-    return encoded_data;
-}
-
-
-unsigned char *base64_decode(const char *data,
-                             size_t input_length,
-                             size_t *output_length) {
-
-    //printf("BASE_CODE: %s\n", data);
-    if (decoding_table == NULL) build_decoding_table();
-
-    if (input_length % 4 != 0) return NULL;
-
-    *output_length = input_length / 4 * 3;
-    if (data[input_length - 1] == '=') (*output_length)--;
-    if (data[input_length - 2] == '=') (*output_length)--;
-
-    unsigned char *decoded_data = malloc(*output_length);
-    if (decoded_data == NULL) return NULL;
-
-    for (int i = 0, j = 0; i < input_length;) {
-
-        uint32_t sextet_a = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
-        uint32_t sextet_b = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
-        uint32_t sextet_c = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
-        uint32_t sextet_d = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
-
-        uint32_t triple = (sextet_a << 3 * 6)
-        + (sextet_b << 2 * 6)
-        + (sextet_c << 1 * 6)
-        + (sextet_d << 0 * 6);
-
-        if (j < *output_length) decoded_data[j++] = (triple >> 2 * 8) & 0xFF;
-        if (j < *output_length) decoded_data[j++] = (triple >> 1 * 8) & 0xFF;
-        if (j < *output_length) decoded_data[j++] = (triple >> 0 * 8) & 0xFF;
-    }
-
-    //printf("BASE_DECODE: %s\n", decoded_data);
-    return decoded_data;
-}
-
-void build_decoding_table() {
-
-    decoding_table = malloc(256);
-
-    for (int i = 0; i < 64; i++)
-        decoding_table[(unsigned char) encoding_table[i]] = i;
-}
-
-int check_sock(int sock) {
-    int error = 0;
-    socklen_t len = sizeof (error);
-    int retval = getsockopt (sock, SOL_SOCKET, SO_ERROR, &error, &len);
-    if (retval == 0 && error == 0) {
-        return 0;
-    }
-    else return -1;
+int start_listen(client_tree * client) {
+    int socket;
+    client->is_listen = 1;
+    client->is_p2p = 1;
+    socket = init_socket();
+    bind_socket(socket, 7070);
+    listen_socket(socket);
+    printf("Waiting for client...\n");
+    client->sock = accept_socket(socket);
+    printf("Connected!\n");
 }
 
 char * recv_file(client_tree * root) {
-    proto_authentication_client * dest_cli;
     char * base64 = malloc(1024 * 1024 * 4 * 1.5);
     //printf("IN GET FILE\n");
     bzero(base64, sizeof(base64));
@@ -257,18 +124,6 @@ int read_safe(int sock, char * dest) {
     return 0;
 }
 
-int start_listen(client_tree * client) {
-    int socket;
-    client->is_listen = 1;
-    client->is_p2p = 1;
-    socket = init_socket();
-    bind_socket(socket, 7070);
-    listen_socket(socket);
-    printf("Waiting for client...\n");
-    client->sock = accept_socket(socket);
-    printf("Connected!\n");
-}
-
 int p2p_info(int sock, char * token) {
     char * ip;
     //printf("\n%p\n", ip);
@@ -365,81 +220,6 @@ void * cli_recv(void * client) {
             printf("Message from %s: %s\n", src, msg);
         }
     }
-}
-
-int bind_socket(int sockfd, int port) {
-    struct sockaddr_in servaddr;
-    bzero(&servaddr, sizeof(servaddr)); 
-  
-    servaddr.sin_family = AF_INET; 
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
-    servaddr.sin_port = htons(port); 
-  
-    if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) { 
-        printf("socket bind failed...\n"); 
-        return -1; 
-    } 
-    else
-        printf("Socket successfully binded..\n");
-        return sockfd;
-}
-
-int listen_socket(int sockfd) {
-    if ((listen(sockfd, 5)) != 0) { 
-        printf("Listen failed...\n"); 
-        return -1; 
-    } 
-    else
-        printf("Server listening..\n");
-        return sockfd;
-}
-
-int accept_socket(int sockfd) {
-    int connfd, len;
-    struct sockaddr_in cli; 
-
-    len = sizeof(cli);
-    connfd = accept(sockfd, (SA*)&cli, &len); 
-    if (connfd < 0) { 
-        printf("server acccept failed...\n"); 
-        return -1;
-    } 
-    else
-        printf("server acccept the client...\n"); 
-        return connfd;
-}
-
-int init_socket() { 
-	int sockfd; 
-	 	sockfd = socket(AF_INET, SOCK_STREAM, 0); 
-	if (sockfd == -1) { 
-		printf("socket creation failed...\n"); 
-		return -1; 
-	} 
-	else
-		printf("Socket successfully created..\n"); 
-	    return sockfd;
-} 
-
-int connect_socket(int sockfd, in_addr_t ip, int port) {
-    struct sockaddr_in servaddr;
-    bzero(&servaddr, sizeof(servaddr)); 
-
-	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr = ip; 
-	servaddr.sin_port = htons(port); 
-    //printf("Ip: %d, Port: %d\n", ip, port);
-	if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
-		printf("connection failed...\n"); 
-		return -1; 
-	} 
-	else
-		printf("connected...\n");
-        return sockfd;
-}
-
-int close_socket(int sockfd) {
-
 }
 
 int send_serialized(int sockfd, char * type, char * payload) {
@@ -546,7 +326,7 @@ int main() {
     bzero(glob_token, sizeof(glob_token));
     strcpy(pass, "CasVVSkO7KDOOZBaDQBAC8K3Z5uUdlOa");
     client->sock = init_socket();
-    connect_socket(client->sock, inet_addr("192.168.1.11"), 8080);
+    connect_socket(client->sock, inet_addr("127.0.0.1"), 8080);
     authenticate(client->sock, pass, glob_token);
     //printf("END %s\n", glob_token);
     pthread_create(&tid, NULL, cli_recv, (void *)client);
